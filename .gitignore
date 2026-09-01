@@ -1,0 +1,3 @@
+*.tgz
+.build-tmp/
+__pycache__/

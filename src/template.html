@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Rive Bench</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<meta name="apple-mobile-web-app-title" content="Rive Bench">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1b2027">
+<!--RIVE_RUNTIME-->
+<style>
+  :root{
+    --stage:#12161b;
+    --shell:#1b2027;
+    --panel:#222a34;
+    --raised:#2b343f;
+    --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.16);
+    --ink:#dde3ea;
+    --ink-dim:#8894a4;
+    --amber:#e9a23b;
+    --rail:320px;
+    --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --num: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--shell);color:var(--ink);
+    font-family:var(--ui);font-size:14px;line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+    touch-action:manipulation;
+  }
+  #app{display:flex;height:100%;width:100%}
+
+  /* ---------- stage ---------- */
+  #stage{
+    position:relative;flex:1;min-width:0;
+    background:var(--stage);
+    display:flex;align-items:center;justify-content:center;
+  }
+  #stage.checker{
+    background-color:#2a2f36;
+    background-image:
+      linear-gradient(45deg,#20242a 25%,transparent 25%,transparent 75%,#20242a 75%),
+      linear-gradient(45deg,#20242a 25%,transparent 25%,transparent 75%,#20242a 75%);
+    background-size:24px 24px;
+    background-position:0 0,12px 12px;
+  }
+  #stage.light{background:#eef1f4}
+  #stage.white{background:#fff}
+  #stage.black{background:#000}
+  #frame{position:relative;width:100%;height:100%;display:flex}
+  #frame.boxed{
+    width:auto;height:auto;max-width:100%;max-height:100%;
+    box-shadow:0 0 0 1px var(--line-strong);
+  }
+  canvas{display:block;width:100%;height:100%;touch-action:none}
+
+  #taps{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .tap{
+    position:absolute;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
+    background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.75);
+    animation:tap .55s ease-out forwards;
+  }
+  @keyframes tap{
+    from{transform:scale(.45);opacity:1}
+    to{transform:scale(1);opacity:0}
+  }
+  #fps{
+    position:absolute;top:12px;left:12px;font-family:var(--num);font-size:11px;
+    color:var(--ink-dim);background:rgba(0,0,0,.45);padding:4px 7px;border-radius:5px;
+    pointer-events:none;
+  }
+  #recDot{
+    position:absolute;top:12px;right:12px;width:11px;height:11px;border-radius:50%;
+    background:#e5484d;box-shadow:0 0 0 4px rgba(229,72,77,.25);
+  }
+
+  #recents{display:flex;flex-direction:column;gap:5px;margin-top:9px}
+  .recent{display:flex;gap:5px}
+  .recent button{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 10px}
+  .recent .x{width:36px;flex:none;text-align:center;color:var(--ink-dim);padding:8px 0}
+
+  .prop{padding:9px 0;border-top:1px solid var(--line)}
+  .prop:first-child{border-top:none}
+  .prop .path{font-size:11px;color:var(--ink-dim);font-family:var(--num);margin-bottom:5px}
+  input[type=color]{
+    width:44px;height:32px;padding:2px;border-radius:7px;flex:none;
+    background:var(--raised);border:1px solid var(--line-strong);
+  }
+
+  #empty{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;
+    text-align:center;padding:32px;color:var(--ink-dim);
+  }
+  #empty h1{
+    margin:0;font-size:26px;font-weight:600;letter-spacing:-.02em;color:var(--ink);
+  }
+  #empty p{margin:0;max-width:38ch}
+  #empty.hide{display:none}
+
+  /* ---------- rail ---------- */
+  #rail{
+    width:var(--rail);flex:none;background:var(--panel);
+    border-left:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #railScroll{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding:16px}
+  .group{margin-bottom:22px}
+  .group:last-child{margin-bottom:8px}
+  .group > h2{
+    margin:0 0 9px;font-size:13px;font-weight:600;color:var(--ink);
+    display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  }
+  .group > h2 span{font-weight:400;color:var(--ink-dim);font-size:12px}
+
+  label.field{display:block;margin-bottom:9px}
+  label.field > em{
+    display:block;font-style:normal;font-size:12px;color:var(--ink-dim);margin-bottom:4px;
+  }
+  select,input[type=text],input[type=number],button{
+    font-family:inherit;font-size:14px;color:var(--ink);
+    background:var(--raised);border:1px solid var(--line-strong);border-radius:7px;
+    padding:9px 10px;width:100%;-webkit-appearance:none;appearance:none;
+  }
+  select{background-image:none}
+  input[type=number]{font-family:var(--num)}
+  button{cursor:pointer;text-align:center}
+  button:active{background:#38424f}
+  button.go{background:var(--amber);border-color:var(--amber);color:#241a06;font-weight:600}
+  button.go:active{background:#d4901f}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{
+    width:auto;flex:1 1 auto;min-width:0;padding:7px 4px;font-size:12px;
+  }
+  .seg button[aria-pressed=true]{
+    background:var(--amber);border-color:var(--amber);color:#241a06;font-weight:600;
+  }
+
+  /* ---------- inputs ---------- */
+  .input-row{
+    padding:10px 0;border-top:1px solid var(--line);
+  }
+  .input-row:first-child{border-top:none}
+  .input-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .input-head b{font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .input-head .val{font-family:var(--num);font-size:12px;color:var(--ink-dim)}
+  .input-head button{width:auto;padding:6px 14px;font-size:12px}
+
+  .switch{
+    width:46px;height:27px;flex:none;border-radius:14px;background:var(--raised);
+    border:1px solid var(--line-strong);position:relative;padding:0;
+  }
+  .switch::after{
+    content:"";position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;
+    background:var(--ink-dim);transition:transform .13s ease,background .13s ease;
+  }
+  .switch[aria-pressed=true]{background:var(--amber);border-color:var(--amber)}
+  .switch[aria-pressed=true]::after{transform:translateX(19px);background:#241a06}
+
+  input[type=range]{
+    width:100%;margin:9px 0 0;-webkit-appearance:none;background:transparent;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--raised)}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--amber);
+    margin-top:-9px;border:none;
+  }
+  .num-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .num-row input{padding:6px 8px;font-size:13px}
+
+  .note{color:var(--ink-dim);font-size:12px;margin:0}
+
+  /* ---------- log ---------- */
+  #log{
+    font-family:var(--num);font-size:11px;line-height:1.6;color:var(--ink-dim);
+    background:var(--stage);border:1px solid var(--line);border-radius:7px;
+    padding:8px;height:110px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;
+  }
+  #log b{color:var(--amber);font-weight:400}
+
+  /* ---------- clean mode ---------- */
+  body.clean #rail{display:none}
+  #peek{
+    position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));
+    width:44px;height:44px;border-radius:50%;display:none;
+    background:rgba(43,52,63,.8);border:1px solid var(--line-strong);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    align-items:center;justify-content:center;padding:0;font-size:18px;
+  }
+  body.clean #peek{display:flex}
+
+  @media (max-width:820px){
+    #app{flex-direction:column}
+    #rail{width:100%;border-left:none;border-top:1px solid var(--line);height:46%}
+    #stage{height:54%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .switch::after{transition:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <div id="frame">
+      <canvas id="canvas"></canvas>
+      <div id="taps"></div>
+    </div>
+    <div id="fps" hidden>–</div>
+    <div id="recDot" hidden></div>
+    <div id="empty">
+      <h1>Rive Bench</h1>
+      <p>Open a .riv file to play it. You pick the artboard — it never guesses.<br>Runs entirely offline.</p>
+    </div>
+  </div>
+
+  <aside id="rail">
+    <div id="railScroll">
+
+      <div class="group">
+        <h2>File <span id="fileName">none open</span></h2>
+        <button class="go" id="pickBtn">Open .riv file</button>
+        <input type="file" id="picker" accept=".riv" hidden>
+        <div id="recents"></div>
+      </div>
+
+      <div class="group" id="pickGroup" hidden>
+        <h2>What to play</h2>
+        <label class="field">
+          <em>Artboard</em>
+          <select id="artboardSel"></select>
+        </label>
+        <label class="field">
+          <em>State machine or animation</em>
+          <select id="playSel"></select>
+        </label>
+        <button id="restartBtn">Restart</button>
+      </div>
+
+      <div class="group" id="dbGroup" hidden>
+        <h2>Data binding <span id="dbName"></span></h2>
+        <div id="dbProps"></div>
+      </div>
+
+      <div class="group" id="textGroup" hidden>
+        <h2>Text run</h2>
+        <label class="field">
+          <em>Run name</em>
+          <input type="text" id="trName" autocapitalize="off" spellcheck="false">
+        </label>
+        <label class="field">
+          <em>Value</em>
+          <input type="text" id="trValue">
+        </label>
+        <button id="trSet">Apply to run</button>
+      </div>
+
+      <div class="group" id="capGroup" hidden>
+        <h2>Capture</h2>
+        <label class="field">
+          <em>Frame</em>
+          <div class="seg" id="frameSeg">
+            <button data-ar="" aria-pressed="true">Free</button>
+            <button data-ar="1.7778">16:9</button>
+            <button data-ar="0.5625">9:16</button>
+            <button data-ar="1">1:1</button>
+          </div>
+        </label>
+        <div class="input-head" style="margin-bottom:9px">
+          <b style="font-weight:400;color:var(--ink-dim);font-size:12px">Show taps while recording</b>
+          <button class="switch" id="tapToggle" aria-pressed="false" aria-label="Show taps"></button>
+        </div>
+        <div class="input-head" style="margin-bottom:9px">
+          <b style="font-weight:400;color:var(--ink-dim);font-size:12px">Frame rate readout</b>
+          <button class="switch" id="fpsToggle" aria-pressed="false" aria-label="Frame rate"></button>
+        </div>
+        <button id="pngBtn">Save current frame</button>
+        <button id="recBtn" style="margin-top:9px" hidden>Record video</button>
+        <p class="note" id="capNote" style="margin-top:9px"></p>
+      </div>
+
+      <div class="group" id="inputGroup" hidden>
+        <h2>Inputs</h2>
+        <div id="inputs"></div>
+      </div>
+
+      <div class="group" id="viewGroup" hidden>
+        <h2>View</h2>
+        <label class="field">
+          <em>Fit</em>
+          <select id="fitSel">
+            <option>contain</option><option>cover</option><option>fill</option>
+            <option>fitWidth</option><option>fitHeight</option><option>none</option>
+            <option>scaleDown</option>
+          </select>
+        </label>
+        <label class="field">
+          <em>Alignment</em>
+          <select id="alignSel">
+            <option>center</option>
+            <option>topLeft</option><option>topCenter</option><option>topRight</option>
+            <option>centerLeft</option><option>centerRight</option>
+            <option>bottomLeft</option><option>bottomCenter</option><option>bottomRight</option>
+          </select>
+        </label>
+        <label class="field">
+          <em>Backdrop</em>
+          <div class="seg" id="bgSeg">
+            <button data-bg="" aria-pressed="true">Dark</button>
+            <button data-bg="black">Black</button>
+            <button data-bg="light">Light</button>
+            <button data-bg="white">White</button>
+            <button data-bg="checker">Checker</button>
+          </div>
+          <div class="num-row" style="margin-top:8px">
+            <input type="color" id="bgPick" value="#12161b" aria-label="Custom backdrop colour">
+            <input type="text" id="bgHex" value="#12161b" spellcheck="false" autocapitalize="off" aria-label="Backdrop hex">
+          </div>
+        </label>
+        <button id="cleanBtn">Hide panel for recording</button>
+      </div>
+
+      <div class="group" id="rtGroup">
+        <h2>Runtime <span id="rtVersion">starting…</span></h2>
+        <label class="field">
+          <em>Renderer</em>
+          <div class="seg" id="rendSeg">
+            <button data-r="webgl2">WebGL2</button>
+            <button data-r="canvas">Canvas 2D</button>
+          </div>
+        </label>
+        <p class="note" id="rtNote" style="margin-bottom:9px"></p>
+        <p class="note" id="rtDiag" style="margin-bottom:9px"></p>
+        <button id="rtCheck">Check for a newer runtime</button>
+        <label class="field" style="margin-top:9px">
+          <div class="input-head">
+            <b style="font-weight:400;color:var(--ink-dim);font-size:12px">Check automatically when online</b>
+            <button class="switch" id="rtAuto" aria-pressed="true" aria-label="Check automatically"></button>
+          </div>
+        </label>
+        <button id="rtReset" hidden>Go back to the built-in runtime</button>
+      </div>
+
+      <div class="group" id="appGroup">
+        <h2>Offline app <span id="swState">checking…</span></h2>
+        <p class="note" id="swNote"></p>
+      </div>
+
+      <div class="group" id="logGroup" hidden>
+        <h2>Events <span id="clearLog" style="cursor:pointer">clear</span></h2>
+        <div id="log"></div>
+      </div>
+
+    </div>
+  </aside>
+</div>
+<button id="peek" title="Show panel">☰</button>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const canvas = $('canvas');
+  let buffer = null, r = null, contents = null, currentSM = null;
+  let fileKey = null, pendingSettings = null, settingsDirty = null;
+
+  /* ---------- renderer, runtime boot & self-update ----------
+     Two renderers ship inside this file. WebGL2 is Rive's recommended path and
+     matches the editor most closely; Canvas 2D is the compatibility fallback.
+     Only one is ever loaded, because both define the same global. A newer
+     runtime downloaded on an earlier run wins over the embedded copy. */
+
+  const PKG = {webgl2: '@rive-app/webgl2', canvas: '@rive-app/canvas'};
+  const cdn = (pkg, v, f) => 'https://cdn.jsdelivr.net/npm/' + pkg + '@' + v + '/' + f;
+  const registry = pkg => 'https://registry.npmjs.org/' + pkg + '/latest';
+
+  function pref(k, v){
+    try {
+      if (v === undefined) return localStorage.getItem(k);
+      localStorage.setItem(k, v);
+    } catch(e){ return null; }
+  }
+
+  function hasWebGL2(){
+    try { return !!document.createElement('canvas').getContext('webgl2'); }
+    catch(e){ return false; }
+  }
+
+  let renderer = pref('renderer') || 'webgl2';
+  if (renderer === 'webgl2' && !hasWebGL2()) renderer = 'canvas';
+
+  let activeVersion = null, activeSource = 'built in';
+
+  function newer(a, b){
+    const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+    for (let i = 0; i < 3; i++){
+      if ((pa[i]||0) > (pb[i]||0)) return true;
+      if ((pa[i]||0) < (pb[i]||0)) return false;
+    }
+    return false;
+  }
+
+  function b64ToBytes(b64){
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  const asText = b64 => new TextDecoder().decode(b64ToBytes(b64));
+  const wasmUrl = bytes => URL.createObjectURL(new Blob([bytes], {type: 'application/wasm'}));
+
+  /* --- IndexedDB, one cache entry per renderer --- */
+  function idb(){
+    return new Promise((res, rej) => {
+      const q = indexedDB.open('riveBench', 2);
+      q.onupgradeneeded = e => {
+        const db = q.result;
+        if (!db.objectStoreNames.contains('runtime')) db.createObjectStore('runtime');
+        if (!db.objectStoreNames.contains('files'))   db.createObjectStore('files');
+      };
+      q.onsuccess = () => res(q.result);
+      q.onerror = () => rej(q.error);
+    });
+  }
+  async function idbGet(k, store){
+    const db = await idb();
+    store = store || 'runtime';
+    return new Promise((res, rej) => {
+      const q = db.transaction(store).objectStore(store).get(k);
+      q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+    });
+  }
+  async function idbPut(k, v, store){
+    const db = await idb();
+    store = store || 'runtime';
+    return new Promise((res, rej) => {
+      const t = db.transaction(store, 'readwrite');
+      t.objectStore(store).put(v, k);
+      t.oncomplete = res; t.onerror = () => rej(t.error);
+    });
+  }
+  async function idbDel(k, store){
+    const db = await idb();
+    store = store || 'runtime';
+    return new Promise(res => {
+      const t = db.transaction(store, 'readwrite');
+      t.objectStore(store).delete(k); t.oncomplete = res; t.onerror = res;
+    });
+  }
+  async function idbAll(store){
+    const db = await idb();
+    return new Promise((res, rej) => {
+      const q = db.transaction(store).objectStore(store).getAll();
+      q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error);
+    });
+  }
+
+  const bootPromise = (async function boot(){
+    const built = window.__RT[renderer];
+    let js = null, wasmBytes = null;
+    activeVersion = built.v;
+
+    try {
+      const cached = await idbGet(renderer);
+      if (cached && newer(cached.version, built.v)){
+        js = cached.js;
+        wasmBytes = new Uint8Array(cached.wasm);
+        activeVersion = cached.version;
+        activeSource = 'downloaded';
+      }
+    } catch(e){ /* no storage, or a bad entry: use what shipped */ }
+
+    if (!js){ js = asText(built.js); wasmBytes = b64ToBytes(built.wasm); }
+
+    const s = document.createElement('script');
+    s.text = js;
+    document.head.appendChild(s);          // defines window.rive
+    rive.RuntimeLoader.setWasmUrl(wasmUrl(wasmBytes));
+
+    window.__RT = null;                    // release the other renderer's payload
+    paintRuntime();
+    if (pref('autoUpdate') !== 'off') setTimeout(() => checkUpdate(true), 1500);
+  })();
+
+  function paintRuntime(pending){
+    const label = renderer === 'webgl2' ? 'WebGL2' : 'Canvas 2D';
+    $('rtVersion').textContent = label + ' · ' + activeVersion;
+    $('rtNote').textContent = pending || ('Version ' + activeVersion + ', ' + activeSource + '.');
+    $('rtReset').hidden = (activeSource === 'built in');
+    [...$('rendSeg').children].forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.r === renderer)));
+
+    let diag;
+    if (renderer === 'webgl2'){
+      const gl = document.createElement('canvas').getContext('webgl2');
+      const pls = gl && gl.getExtension('WEBGL_shader_pixel_local_storage');
+      diag = pls
+        ? 'Pixel local storage available — fastest path.'
+        : 'No pixel local storage extension, so Rive falls back to MSAA. Normal in Safari.';
+    } else {
+      diag = 'Browser 2D renderer. Widest compatibility, lower fidelity on complex art.';
+    }
+    $('rtDiag').textContent = diag;
+  }
+
+  async function checkUpdate(quiet){
+    const pkg = PKG[renderer];
+    if (!quiet) $('rtNote').textContent = 'Checking…';
+    try {
+      const latest = (await (await fetch(registry(pkg))).json()).version;
+
+      const cached = await idbGet(renderer).catch(() => null);
+      if (cached && cached.version === latest && newer(latest, activeVersion)){
+        paintRuntime('Version ' + latest + ' is ready. Reopen the page to use it.');
+        return;
+      }
+      if (!newer(latest, activeVersion)){
+        if (!quiet) paintRuntime('Up to date — ' + activeVersion + ' is current.');
+        return;
+      }
+
+      paintRuntime('Downloading ' + latest + '…');
+      const [js, wasm] = await Promise.all([
+        fetch(cdn(pkg, latest, 'rive.js')).then(r => r.text()),
+        fetch(cdn(pkg, latest, 'rive.wasm')).then(r => r.arrayBuffer())
+      ]);
+      if (!js.includes('root["rive"]')) throw new Error('unexpected bundle');
+      await idbPut(renderer, {version: latest, js: js, wasm: wasm});
+      paintRuntime('Version ' + latest + ' downloaded. Reopen the page to use it.');
+      log('runtime', pkg + ' ' + latest + ' cached');
+    } catch(e){
+      if (!quiet) paintRuntime('No connection, or the registry did not answer. Still on ' + activeVersion + '.');
+    }
+  }
+
+  $('rendSeg').onclick = e => {
+    const b = e.target.closest('button');
+    if (!b || b.dataset.r === renderer) return;
+    if (b.dataset.r === 'webgl2' && !hasWebGL2()){
+      paintRuntime('This browser has no WebGL2 context available.');
+      return;
+    }
+    pref('renderer', b.dataset.r);
+    location.reload();
+  };
+
+  $('rtCheck').onclick = () => checkUpdate(false);
+  $('rtAuto').setAttribute('aria-pressed', String(pref('autoUpdate') !== 'off'));
+  $('rtAuto').onclick = e => {
+    const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+    e.currentTarget.setAttribute('aria-pressed', String(on));
+    pref('autoUpdate', on ? 'on' : 'off');
+  };
+  $('rtReset').onclick = async () => {
+    await idbDel(renderer);
+    paintRuntime('Cleared. Reopen the page to run the built-in version.');
+  };
+
+  /* ---------- logging ---------- */
+  function log(kind, msg){
+    const el = $('log');
+    $('logGroup').hidden = false;
+    const t = new Date().toLocaleTimeString([], {hour12:false});
+    el.insertAdjacentHTML('beforeend', `<div>${t} <b>${kind}</b> ${msg}</div>`);
+    el.scrollTop = el.scrollHeight;
+  }
+  $('clearLog').onclick = () => { $('log').innerHTML = ''; };
+
+  /* ---------- file loading ---------- */
+  $('pickBtn').onclick = () => $('picker').click();
+  $('picker').onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    openBuffer(await f.arrayBuffer(), f.name);
+  };
+
+  async function openBuffer(buf, name, saved){
+    await bootPromise;
+    fileKey = name;
+    pendingSettings = saved || null;
+    buffer = buf;
+    $('fileName').textContent = name;
+    $('empty').classList.add('hide');
+    // Read the file's contents with a throwaway instance, then let the user choose.
+    if (r) { r.cleanup(); r = null; }
+    const probe = new rive.Rive({
+      buffer: buffer,
+      canvas: canvas,
+      autoplay: false,
+      onLoad: () => {
+        contents = probe.contents;
+        probe.cleanup();
+        fillArtboards();
+        rememberFile();
+      },
+      onLoadError: () => log('error', 'This file would not parse. Re-export it from Rive.')
+    });
+  }
+
+
+  function rgbToHex(v){
+    const m = String(v).match(/(\d+)\D+(\d+)\D+(\d+)/);
+    if (!m) return /^#[0-9a-f]{6}$/i.test(v) ? v : null;
+    return '#' + [1,2,3].map(i => (+m[i]).toString(16).padStart(2,'0')).join('');
+  }
+
+  /* ---------- recent files ----------
+     The .riv bytes live in IndexedDB, so reopening is one tap and works offline.
+     Each entry also carries the view settings that file was last used with. */
+
+  const MAX_RECENTS = 8;
+
+  function currentSettings(){
+    return {
+      artboard: $('artboardSel').value,
+      play:     $('playSel').value,
+      fit:      $('fitSel').value,
+      align:    $('alignSel').value,
+      bg:       $('stage').className,
+      bgCustom: $('stage').style.background || ''
+    };
+  }
+
+  async function rememberFile(){
+    if (!fileKey || !buffer) return;
+    try {
+      await idbPut(fileKey, {
+        name: fileKey, at: Date.now(),
+        bytes: buffer.slice(0),
+        settings: pendingSettings || currentSettings()
+      }, 'files');
+      const all = await idbAll('files');
+      if (all.length > MAX_RECENTS){
+        all.sort((a,b) => b.at - a.at);
+        for (const old of all.slice(MAX_RECENTS)) await idbDel(old.name, 'files');
+      }
+      drawRecents();
+    } catch(e){ /* storage unavailable — recents just stay empty */ }
+  }
+
+  function saveSettingsSoon(){
+    if (!fileKey) return;
+    clearTimeout(settingsDirty);
+    settingsDirty = setTimeout(async () => {
+      try {
+        const rec = await idbGet(fileKey, 'files');
+        if (rec){ rec.settings = currentSettings(); rec.at = Date.now(); await idbPut(fileKey, rec, 'files'); }
+      } catch(e){}
+    }, 400);
+  }
+
+  async function drawRecents(){
+    const box = $('recents');
+    let all = [];
+    try { all = await idbAll('files'); } catch(e){ return; }
+    all.sort((a,b) => b.at - a.at);
+    box.innerHTML = '';
+    all.forEach(rec => {
+      const row = document.createElement('div');
+      row.className = 'recent';
+      const open = document.createElement('button');
+      open.textContent = rec.name;
+      open.onclick = () => openBuffer(rec.bytes.slice ? rec.bytes.slice(0) : rec.bytes, rec.name, rec.settings);
+      const del = document.createElement('button');
+      del.className = 'x'; del.textContent = '×';
+      del.setAttribute('aria-label', 'Forget ' + rec.name);
+      del.onclick = async () => { await idbDel(rec.name, 'files'); drawRecents(); };
+      row.append(open, del);
+      box.appendChild(row);
+    });
+  }
+  drawRecents();
+
+  function applySaved(){
+    const s = pendingSettings;
+    if (!s) return false;
+    pendingSettings = null;
+    if ([...$('artboardSel').options].some(o => o.value === s.artboard)) $('artboardSel').value = s.artboard;
+    if (s.fit)   $('fitSel').value = s.fit;
+    if (s.align) $('alignSel').value = s.align;
+    if (s.bgCustom) setCustom(rgbToHex(s.bgCustom) || s.bgCustom);
+    else if (s.bg !== undefined) setPreset(s.bg);
+    return s;
+  }
+
+  /* ---------- artboard + playable pickers ---------- */
+  function fillArtboards(){
+    const sel = $('artboardSel');
+    sel.innerHTML = '';
+    contents.artboards.forEach(a => {
+      const o = document.createElement('option');
+      o.value = o.textContent = a.name;
+      sel.appendChild(o);
+    });
+    $('pickGroup').hidden = false;
+    $('viewGroup').hidden = false;
+    $('capGroup').hidden = false;
+    $('textGroup').hidden = false;
+    const saved = applySaved();
+    fillPlayables(saved && saved.play);
+  }
+
+  function currentArtboard(){
+    return contents.artboards.find(a => a.name === $('artboardSel').value);
+  }
+
+  function fillPlayables(want){
+    const ab = currentArtboard();
+    const sel = $('playSel');
+    sel.innerHTML = '';
+    if (ab.stateMachines && ab.stateMachines.length){
+      const g = document.createElement('optgroup');
+      g.label = 'State machines';
+      ab.stateMachines.forEach(sm => {
+        const o = document.createElement('option');
+        o.value = 'sm:' + sm.name;
+        o.textContent = sm.name;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    }
+    if (ab.animations && ab.animations.length){
+      const g = document.createElement('optgroup');
+      g.label = 'Animations';
+      ab.animations.forEach(an => {
+        const o = document.createElement('option');
+        o.value = 'an:' + an;
+        o.textContent = an;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    }
+    if (!sel.options.length){
+      const o = document.createElement('option');
+      o.value = 'none';
+      o.textContent = 'nothing playable on this artboard';
+      sel.appendChild(o);
+    }
+    if (want && [...sel.options].some(o => o.value === want)) sel.value = want;
+    mount();
+  }
+
+  $('artboardSel').onchange = () => { fillPlayables(); saveSettingsSoon(); };
+  $('playSel').onchange = () => { mount(); saveSettingsSoon(); };
+  $('restartBtn').onclick = mount;
+
+  /* ---------- mounting ---------- */
+  function layout(){
+    return new rive.Layout({
+      fit: rive.Fit[$('fitSel').value] || rive.Fit.contain,
+      alignment: rive.Alignment[$('alignSel').value] || rive.Alignment.center
+    });
+  }
+
+  function mount(){
+    if (!buffer || !contents) return;
+    if (r) { r.cleanup(); r = null; }
+    currentSM = null;
+
+    const choice = $('playSel').value;
+    const opts = {
+      buffer: buffer,
+      canvas: canvas,
+      artboard: $('artboardSel').value,
+      autoplay: true,
+      autoBind: true,
+      layout: layout(),
+      onLoad: () => {
+        fitFrame();
+        buildInputs();
+        buildDataBinding();
+        log('loaded', $('artboardSel').value + ' · ' + (currentSM || choice.slice(3)));
+      },
+      onLoadError: () => log('error', 'That artboard would not load.'),
+      onStateChange: e => log('state', [].concat(e.data).join(', ')),
+      onRiveEvent: e => {
+        const d = e.data || {};
+        const extra = d.properties && Object.keys(d.properties).length
+          ? ' ' + JSON.stringify(d.properties) : '';
+        log('event', (d.name || 'fired') + extra);
+      }
+    };
+
+    if (choice.startsWith('sm:')){
+      currentSM = choice.slice(3);
+      opts.stateMachines = currentSM;
+    } else if (choice.startsWith('an:')){
+      opts.animations = choice.slice(3);
+    }
+
+    r = new rive.Rive(opts);
+  }
+
+  $('fitSel').onchange = $('alignSel').onchange = () => {
+    if (r) r.layout = layout();
+    saveSettingsSoon();
+  };
+
+  /* ---------- state machine inputs ---------- */
+  function kindOf(i){
+    const T = rive.StateMachineInputType || {};
+    if (i.type === T.Trigger) return 'trigger';
+    if (i.type === T.Boolean) return 'bool';
+    if (i.type === T.Number)  return 'num';
+    if (typeof i.value === 'boolean') return 'bool';
+    if (typeof i.value === 'number')  return 'num';
+    return 'trigger';
+  }
+
+  function buildInputs(){
+    const box = $('inputs');
+    box.innerHTML = '';
+    const list = currentSM ? (r.stateMachineInputs(currentSM) || []) : [];
+
+    if (!list.length){
+      $('inputGroup').hidden = !currentSM;
+      if (currentSM) box.innerHTML = '<p class="note">This state machine has no inputs.</p>';
+      return;
+    }
+    $('inputGroup').hidden = false;
+
+    list.forEach(inp => {
+      const kind = kindOf(inp);
+      const row = document.createElement('div');
+      row.className = 'input-row';
+
+      const head = document.createElement('div');
+      head.className = 'input-head';
+      const name = document.createElement('b');
+      name.textContent = inp.name;
+      head.appendChild(name);
+      row.appendChild(head);
+
+      if (kind === 'trigger'){
+        const b = document.createElement('button');
+        b.textContent = 'Fire';
+        b.onclick = () => { inp.fire(); log('fire', inp.name); };
+        head.appendChild(b);
+      }
+
+      if (kind === 'bool'){
+        const s = document.createElement('button');
+        s.className = 'switch';
+        s.setAttribute('aria-pressed', String(!!inp.value));
+        s.setAttribute('aria-label', inp.name);
+        s.onclick = () => {
+          inp.value = !inp.value;
+          s.setAttribute('aria-pressed', String(inp.value));
+        };
+        head.appendChild(s);
+      }
+
+      if (kind === 'num'){
+        const readout = document.createElement('span');
+        readout.className = 'val';
+        readout.textContent = inp.value;
+        head.appendChild(readout);
+
+        const start = Number(inp.value) || 0;
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = Math.min(0, start);
+        slider.max = Math.max(100, start);
+        slider.step = 'any';
+        slider.value = start;
+
+        const numRow = document.createElement('div');
+        numRow.className = 'num-row';
+        const lo = document.createElement('input'); lo.type='number'; lo.value=slider.min; lo.title='min';
+        const hi = document.createElement('input'); hi.type='number'; hi.value=slider.max; hi.title='max';
+        lo.oninput = () => slider.min = lo.value;
+        hi.oninput = () => slider.max = hi.value;
+        numRow.append(lo, hi);
+
+        slider.oninput = () => {
+          const v = parseFloat(slider.value);
+          inp.value = v;
+          readout.textContent = Math.round(v * 100) / 100;
+        };
+        row.append(slider, numRow);
+      }
+
+      box.appendChild(row);
+    });
+  }
+
+
+  /* ---------- data binding ----------
+     Walks the bound View Model, one row per property, nested models included.
+     Editing a row writes straight through to the running instance. */
+
+  function buildDataBinding(){
+    const box = $('dbProps');
+    box.innerHTML = '';
+    let vmi = null;
+    try { vmi = r.viewModelInstance; } catch(e){}
+    if (!vmi){ $('dbGroup').hidden = true; return; }
+
+    $('dbGroup').hidden = false;
+    try { $('dbName').textContent = vmi.viewModelName || ''; } catch(e){ $('dbName').textContent = ''; }
+
+    let rows = 0;
+    (function walk(inst, prefix, depth){
+      if (!inst || depth > 3) return;
+      let props = [];
+      try { props = inst.properties || []; } catch(e){ return; }
+      props.forEach(p => {
+        const path = prefix ? prefix + '/' + p.name : p.name;
+        if (p.type === 'viewModel'){
+          let child = null;
+          try { child = vmi.viewModel(path); } catch(e){}
+          walk(child, path, depth + 1);
+          return;
+        }
+        const row = propRow(vmi, path, p);
+        if (row){ box.appendChild(row); rows++; }
+      });
+    })(vmi, '', 0);
+
+    if (!rows) box.innerHTML = '<p class="note">This view model has no editable properties.</p>';
+  }
+
+  function propRow(vmi, path, p){
+    let handle = null;
+    try {
+      if (p.type === 'number' || p.type === 'integer') handle = vmi.number(path);
+      else if (p.type === 'string')   handle = vmi.string(path);
+      else if (p.type === 'boolean')  handle = vmi.boolean(path);
+      else if (p.type === 'color')    handle = vmi.color(path);
+      else if (p.type === 'trigger')  handle = vmi.trigger(path);
+      else if (p.type === 'enumType') handle = vmi.enum(path);
+      else return null;
+    } catch(e){ return null; }
+    if (!handle) return null;
+
+    const row = document.createElement('div');
+    row.className = 'prop';
+    if (path.includes('/')){
+      const c = document.createElement('div');
+      c.className = 'path';
+      c.textContent = path.slice(0, path.lastIndexOf('/'));
+      row.appendChild(c);
+    }
+    const head = document.createElement('div');
+    head.className = 'input-head';
+    const nm = document.createElement('b');
+    nm.textContent = p.name;
+    head.appendChild(nm);
+    row.appendChild(head);
+
+    if (p.type === 'trigger'){
+      const b = document.createElement('button');
+      b.textContent = 'Fire';
+      b.onclick = () => { handle.trigger(); log('bind', path); };
+      b.style.width = 'auto'; b.style.padding = '6px 14px'; b.style.fontSize = '12px';
+      head.appendChild(b);
+    }
+
+    if (p.type === 'boolean'){
+      const s = document.createElement('button');
+      s.className = 'switch';
+      s.setAttribute('aria-pressed', String(!!handle.value));
+      s.setAttribute('aria-label', p.name);
+      s.onclick = () => { handle.value = !handle.value; s.setAttribute('aria-pressed', String(handle.value)); };
+      head.appendChild(s);
+    }
+
+    if (p.type === 'number' || p.type === 'integer'){
+      const f = document.createElement('input');
+      f.type = 'number'; f.value = handle.value;
+      f.style.width = '110px'; f.style.padding = '6px 8px';
+      f.oninput = () => {
+        const v = parseFloat(f.value);
+        if (!isNaN(v)) handle.value = (p.type === 'integer') ? Math.round(v) : v;
+      };
+      head.appendChild(f);
+    }
+
+    if (p.type === 'string'){
+      const f = document.createElement('input');
+      f.type = 'text'; f.value = handle.value || '';
+      f.oninput = () => handle.value = f.value;
+      row.appendChild(f);
+    }
+
+    if (p.type === 'enumType'){
+      const sel = document.createElement('select');
+      let vals = [];
+      try { vals = handle.values || []; } catch(e){}
+      vals.forEach(v => {
+        const o = document.createElement('option');
+        o.value = o.textContent = v;
+        sel.appendChild(o);
+      });
+      try { sel.value = handle.value; } catch(e){}
+      sel.onchange = () => handle.value = sel.value;
+      row.appendChild(sel);
+    }
+
+    if (p.type === 'color'){
+      const f = document.createElement('input');
+      f.type = 'color';
+      try { f.value = '#' + ((handle.value >>> 0) & 0xffffff).toString(16).padStart(6, '0'); } catch(e){}
+      f.oninput = () => {
+        const rgb = parseInt(f.value.slice(1), 16);
+        handle.value = (0xff << 24 | rgb) >>> 0;
+      };
+      head.appendChild(f);
+    }
+
+    return row;
+  }
+
+  /* ---------- text runs ---------- */
+  $('trSet').onclick = () => {
+    const n = $('trName').value.trim();
+    if (!n || !r) return;
+    try { r.setTextRunValue(n, $('trValue').value); log('text', n + ' set'); }
+    catch(e){ log('error', 'no text run named ' + n); }
+  };
+  $('trName').onchange = () => {
+    if (!r) return;
+    try { $('trValue').value = r.getTextRunValue($('trName').value.trim()) || ''; } catch(e){}
+  };
+
+
+  /* ---------- capture kit ---------- */
+
+  let aspect = null;
+
+  function fitFrame(){
+    const f = $('frame');
+    if (aspect){
+      f.classList.add('boxed');
+      const s = $('stage').getBoundingClientRect();
+      const pad = 24;
+      let w = s.width - pad, hgt = w / aspect;
+      if (hgt > s.height - pad){ hgt = s.height - pad; w = hgt * aspect; }
+      f.style.width = Math.max(80, Math.round(w)) + 'px';
+      f.style.height = Math.max(80, Math.round(hgt)) + 'px';
+    } else {
+      f.classList.remove('boxed');
+      f.style.width = ''; f.style.height = '';
+    }
+    if (r) r.resizeDrawingSurfaceToCanvas();
+  }
+
+  $('frameSeg').onclick = e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    [...$('frameSeg').children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    aspect = b.dataset.ar ? parseFloat(b.dataset.ar) : null;
+    fitFrame();
+  };
+
+  /* taps — iOS screen recording does not draw them, so we do */
+  let showTaps = false;
+  $('tapToggle').onclick = e => {
+    showTaps = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+    e.currentTarget.setAttribute('aria-pressed', String(showTaps));
+  };
+  canvas.addEventListener('pointerdown', e => {
+    if (!showTaps) return;
+    const box = $('frame').getBoundingClientRect();
+    const d = document.createElement('div');
+    d.className = 'tap';
+    d.style.left = (e.clientX - box.left) + 'px';
+    d.style.top  = (e.clientY - box.top) + 'px';
+    $('taps').appendChild(d);
+    setTimeout(() => d.remove(), 600);
+  });
+
+  /* frame rate readout */
+  let fpsOn = false, frames = 0, fpsLast = performance.now();
+  $('fpsToggle').onclick = e => {
+    fpsOn = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+    e.currentTarget.setAttribute('aria-pressed', String(fpsOn));
+    $('fps').hidden = !fpsOn;
+  };
+  (function tick(){
+    frames++;
+    const now = performance.now();
+    if (now - fpsLast >= 500){
+      if (fpsOn){
+        const fps = Math.round(frames * 1000 / (now - fpsLast));
+        $('fps').textContent = fps + ' fps · ' + (1000/fps).toFixed(1) + ' ms';
+      }
+      frames = 0; fpsLast = now;
+    }
+    requestAnimationFrame(tick);
+  })();
+
+
+  /* The backdrop is CSS behind a transparent canvas, so exports have to
+     composite it in — otherwise stills and clips come out on black. */
+  function backdropPaint(){
+    const st = getComputedStyle($('stage'));
+    const c = st.backgroundColor;
+    if (!c || c === 'transparent' || /rgba\(.*,\s*0\)$/.test(c)) return null;
+    return c;
+  }
+
+  function composite(){
+    const out = document.createElement('canvas');
+    out.width = canvas.width || canvas.clientWidth;
+    out.height = canvas.height || canvas.clientHeight;
+    const ctx = out.getContext('2d');
+    let running = true;
+    function draw(){
+      if (!running) return;
+      if (out.width !== canvas.width || out.height !== canvas.height){
+        out.width = canvas.width; out.height = canvas.height;
+      }
+      const paint = backdropPaint();
+      if (paint){ ctx.fillStyle = paint; ctx.fillRect(0, 0, out.width, out.height); }
+      else ctx.clearRect(0, 0, out.width, out.height);
+      try { ctx.drawImage(canvas, 0, 0, out.width, out.height); } catch(e){}
+      requestAnimationFrame(draw);
+    }
+    draw();
+    return {canvas: out, ctx: ctx, stop(){ running = false; }};
+  }
+
+  /* true when the composite holds nothing but flat backdrop — the WebGL
+     drawing-buffer case, worth saying out loud rather than saving a blank */
+  function looksEmpty(ctx, w, h){
+    try {
+      const d = ctx.getImageData(0, 0, Math.min(w, 64), Math.min(h, 64)).data;
+      for (let i = 4; i < d.length; i += 4)
+        if (d[i] !== d[0] || d[i+1] !== d[1] || d[i+2] !== d[2]) return false;
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function saveBlob(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  const stamp = () => new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+
+  $('pngBtn').onclick = () => {
+    if (!r) return;
+    const c = composite();
+    requestAnimationFrame(() => {
+      c.stop();
+      if (looksEmpty(c.ctx, c.canvas.width, c.canvas.height)){
+        $('capNote').textContent = 'Only the backdrop came through. Switch to Canvas 2D for stills.';
+        return;
+      }
+      c.canvas.toBlob(b => {
+        if (!b){ $('capNote').textContent = 'The frame came back empty.'; return; }
+        saveBlob(b, (fileKey || 'frame').replace(/\.riv$/,'') + '-' + stamp() + '.png');
+        $('capNote').textContent = 'Frame saved, backdrop included. Lands in Files, not Photos.';
+      }, 'image/png');
+    });
+  };
+
+  /* video capture, where the browser allows it */
+  let rec = null, chunks = [], comp = null;
+  const canRecord = typeof MediaRecorder !== 'undefined' &&
+                    typeof canvas.captureStream === 'function';
+  if (canRecord) $('recBtn').hidden = false;
+  else $('capNote').textContent = 'In-page video capture is unavailable here — use the iPad screen recorder.';
+
+  function recMime(){
+    const want = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+    return want.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  $('recBtn').onclick = () => {
+    if (rec && rec.state === 'recording'){ rec.stop(); return; }
+    try {
+      const type = recMime();
+      comp = composite();
+      rec = new MediaRecorder(comp.canvas.captureStream(60), type ? {mimeType: type} : undefined);
+      chunks = [];
+      rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      rec.onstop = () => {
+        if (comp){ comp.stop(); comp = null; }
+        $('recDot').hidden = true;
+        $('recBtn').textContent = 'Record video';
+        const blob = new Blob(chunks, {type: rec.mimeType || 'video/mp4'});
+        const ext = (rec.mimeType || '').includes('webm') ? 'webm' : 'mp4';
+        saveBlob(blob, (fileKey || 'clip').replace(/\.riv$/,'') + '-' + stamp() + '.' + ext);
+        $('capNote').textContent = 'Clip saved to Files.';
+      };
+      rec.start();
+      $('recDot').hidden = false;
+      $('recBtn').textContent = 'Stop and save';
+      $('capNote').textContent = 'Recording the framed canvas and backdrop — panel and taps are not included.';
+    } catch(e){
+      if (comp){ comp.stop(); comp = null; }
+      $('capNote').textContent = 'This browser refused to record the canvas. Use the iPad screen recorder.';
+    }
+  };
+
+  /* ---------- backdrop, clean mode, resize ---------- */
+  function setPreset(bg){
+    $('stage').className = bg;
+    $('stage').style.background = '';
+    [...$('bgSeg').children].forEach(x => x.setAttribute('aria-pressed', String(x.dataset.bg === bg)));
+  }
+  function setCustom(hex){
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return false;
+    $('stage').className = '';
+    $('stage').style.background = hex;
+    [...$('bgSeg').children].forEach(x => x.setAttribute('aria-pressed', 'false'));
+    $('bgPick').value = hex;
+    $('bgHex').value = hex;
+    return true;
+  }
+
+  $('bgSeg').onclick = e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    setPreset(b.dataset.bg);
+    saveSettingsSoon();
+  };
+  $('bgPick').oninput = () => { setCustom($('bgPick').value); saveSettingsSoon(); };
+  $('bgHex').oninput = () => {
+    let v = $('bgHex').value.trim();
+    if (v && v[0] !== '#') v = '#' + v;
+    if (setCustom(v)) saveSettingsSoon();
+  };
+
+  function setClean(on){
+    document.body.classList.toggle('clean', on);
+    requestAnimationFrame(fitFrame);
+  }
+  $('cleanBtn').onclick = () => setClean(true);
+  $('peek').onclick = () => setClean(false);
+  window.addEventListener('keydown', e => {
+    if (e.key === 'c' || e.key === 'C') setClean(!document.body.classList.contains('clean'));
+  });
+
+  let t;
+  window.addEventListener('resize', () => {
+    clearTimeout(t);
+    t = setTimeout(fitFrame, 80);
+  });
+
+
+  /* ---------- offline install ----------
+     The service worker copies the app onto the device on first visit, so
+     later launches need no network. Registration is best effort: if it fails
+     the app still runs, it just will not work offline. */
+  (function registerSW(){
+    if (!('serviceWorker' in navigator)){
+      $('swState').textContent = 'unavailable';
+      $('swNote').textContent = 'This browser cannot install the app. It still runs while online.';
+      return;
+    }
+    if (location.protocol === 'file:'){
+      $('swState').textContent = 'needs a server';
+      $('swNote').textContent = 'Opened as a local file, so offline install is off. Serve it over http or https.';
+      return;
+    }
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      const ready = navigator.serviceWorker.controller;
+      $('swState').textContent = ready ? 'installed' : 'installing…';
+      $('swNote').textContent = ready
+        ? 'Cached on this device. Works with no connection.'
+        : 'Copying the app to this device — give it a moment, then reload once.';
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing;
+        if (!w) return;
+        w.addEventListener('statechange', () => {
+          if (w.state === 'installed'){
+            $('swState').textContent = navigator.serviceWorker.controller ? 'update ready' : 'installed';
+            $('swNote').textContent = navigator.serviceWorker.controller
+              ? 'A newer version is downloaded. Close and reopen to use it.'
+              : 'Cached on this device. Works with no connection.';
+          }
+        });
+      });
+    }).catch(() => {
+      $('swState').textContent = 'not installed';
+      $('swNote').textContent = 'Install failed. The app still works while you have a connection.';
+    });
+  })();
+
+  /* ---------- drag and drop on desktop ---------- */
+  ['dragover','drop'].forEach(ev => document.addEventListener(ev, e => e.preventDefault()));
+  document.addEventListener('drop', async e => {
+    const f = e.dataTransfer.files[0];
+    if (f && f.name.endsWith('.riv')) openBuffer(await f.arrayBuffer(), f.name);
+  });
+})();
+</script>
+</body>
+</html>
