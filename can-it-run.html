@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Can it run?</title>
+<style>
+  body{
+    margin:0;padding:28px 22px;background:#1b2027;color:#dde3ea;
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  h1{font-size:20px;margin:0 0 6px}
+  p{color:#8894a4;margin:0 0 20px}
+  #verdict{
+    padding:14px 16px;border-radius:9px;background:#3a1f22;border:1px solid #6b2f34;
+    font-weight:600;margin-bottom:20px;
+  }
+  ul{list-style:none;padding:0;margin:0}
+  li{padding:9px 0;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:10px}
+  li span{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8894a4}
+  .y{color:#5ac47d}.n{color:#e5484d}
+  button{
+    font:inherit;color:#241a06;background:#e9a23b;border:0;border-radius:8px;
+    padding:12px 16px;width:100%;margin-top:20px;font-weight:600;
+  }
+</style>
+</head>
+<body>
+  <h1>Can it run?</h1>
+  <p>Open this the same way you opened the bench.</p>
+
+  <div id="verdict">JavaScript did not run. That is the answer — the opener is blocking scripts.</div>
+
+  <ul id="list"></ul>
+  <input type="file" id="f" accept=".riv" hidden>
+  <button id="b">Test the file picker</button>
+
+<script>
+(function(){
+  var v = document.getElementById('verdict');
+  v.textContent = 'JavaScript is running. Checks below.';
+  v.style.background = '#1e3324';
+  v.style.borderColor = '#2f6b3f';
+
+  var checks = [
+    ['WebAssembly',        typeof WebAssembly === 'object'],
+    ['WebGL2 context',     (function(){ try { return !!document.createElement('canvas').getContext('webgl2'); } catch(e){ return false; } })()],
+    ['Blob URLs',          typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'],
+    ['IndexedDB',          (function(){ try { return !!indexedDB; } catch(e){ return false; } })()],
+    ['localStorage',       (function(){ try { localStorage.setItem('t','1'); localStorage.removeItem('t'); return true; } catch(e){ return false; } })()],
+    ['Canvas capture',     typeof document.createElement('canvas').captureStream === 'function'],
+    ['MediaRecorder',      typeof MediaRecorder !== 'undefined'],
+    ['Network (fetch)',    typeof fetch === 'function']
+  ];
+
+  var ul = document.getElementById('list');
+  checks.forEach(function(c){
+    var li = document.createElement('li');
+    li.innerHTML = c[0] + '<span class="' + (c[1] ? 'y' : 'n') + '">' + (c[1] ? 'yes' : 'no') + '</span>';
+    ul.appendChild(li);
+  });
+
+  function row(label, text, ok){
+    var li = document.createElement('li');
+    li.innerHTML = label + '<span class="' + (ok ? 'y' : 'n') + '">' + text + '</span>';
+    ul.appendChild(li);
+  }
+
+  document.getElementById('b').onclick = function(){
+    document.getElementById('f').click();
+    setTimeout(function(){ row('Picker opened', 'tap a .riv', true); }, 300);
+  };
+
+  document.getElementById('f').onchange = function(e){
+    var file = e.target.files[0];
+    if (!file) return;
+    file.arrayBuffer().then(function(buf){
+      var b = new Uint8Array(buf);
+      var magic = String.fromCharCode(b[0], b[1], b[2], b[3]);
+      row('File read', file.name + ' · ' + Math.round(buf.byteLength/1024) + ' KB', true);
+      row('Looks like a .riv', magic, magic === 'RIVE');
+    }).catch(function(){ row('File read', 'failed', false); });
+  };
+
+  // does a big base64 string survive parsing? the bench embeds two ~2.6 MB ones
+  try {
+    var big = new Array(200001).join('QUJD');
+    row('Large string handling', Math.round(big.length/1024) + ' KB ok', true);
+  } catch(e){
+    row('Large string handling', 'failed', false);
+  }
+})();
+</script>
+</body>
+</html>
