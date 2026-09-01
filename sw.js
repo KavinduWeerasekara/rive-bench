@@ -5,7 +5,7 @@
    when the app is opened online, sees the new version, downloads the new
    assets, and swaps them in on the next launch. */
 
-const VERSION = 'rive-bench-v2';
+const VERSION = 'rive-bench-v3';
 
 const CORE = [
   './',
