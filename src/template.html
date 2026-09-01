@@ -372,6 +372,10 @@
   const canvas = $('canvas');
   let buffer = null, r = null, contents = null, currentSM = null;
   let fileKey = null, pendingSettings = null, settingsDirty = null;
+  let motionPermission = null;   // null = not yet asked, 'granted', 'denied'
+  let gyroListening = false;     // shared deviceorientation listener attached?
+  let gyroBindings = [];         // [{handle, propType, axis, srcLo, srcHi, outLo, outHi, fieldEl}]
+  let gyroWatchdog = null;       // "no data yet" timer, armed only for the first active binding
 
   /* ---------- renderer, runtime boot & self-update ----------
      Two renderers ship inside this file. WebGL2 is Rive's recommended path and
@@ -893,12 +897,68 @@
     });
   }
 
+  /* ---------- gyroscope / tilt control ----------
+     One deviceorientation listener and one bindings array, shared by every
+     bound numeric property row. iOS 13+ requires requestPermission() to be
+     called synchronously from inside a click handler — no await ahead of it. */
+
+  function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
+
+  function onOrientation(e){
+    // Some browsers fire one all-null event when there's no orientation
+    // sensor at all — only clear the watchdog once a value actually lands.
+    let applied = false;
+    gyroBindings.forEach(b => {
+      const raw = e[b.axis];
+      if (raw == null) return;
+      const t = clamp((raw - b.srcLo) / (b.srcHi - b.srcLo || 1), 0, 1);
+      let v = b.outLo + t * (b.outHi - b.outLo);
+      if (b.propType === 'integer') v = Math.round(v);
+      try { b.handle.value = v; } catch(err){ return; }   // handle went stale mid-flight
+      if (b.fieldEl) b.fieldEl.value = Math.round(v * 100) / 100;
+      applied = true;
+    });
+    if (applied && gyroWatchdog){ clearTimeout(gyroWatchdog); gyroWatchdog = null; }
+  }
+
+  function attachGyroListener(){
+    if (gyroListening) return;
+    gyroListening = true;
+    window.addEventListener('deviceorientation', onOrientation);
+  }
+
+  function ensureMotionAccess(done){
+    if (typeof DeviceOrientationEvent === 'undefined'){ done(false); return; }
+    if (typeof DeviceOrientationEvent.requestPermission !== 'function'){
+      attachGyroListener(); done(true); return;           // not iOS 13+, no prompt needed
+    }
+    if (motionPermission === 'granted'){ attachGyroListener(); done(true); return; }
+    if (motionPermission === 'denied'){
+      log('error', 'Motion access was denied. Enable it in Settings › Safari › Motion & Orientation Access, then reload.');
+      done(false); return;
+    }
+    DeviceOrientationEvent.requestPermission().then(state => {
+      motionPermission = (state === 'granted') ? 'granted' : 'denied';
+      if (motionPermission === 'granted'){ attachGyroListener(); done(true); }
+      else {
+        log('error', 'Motion access was denied. Enable it in Settings › Safari › Motion & Orientation Access, then reload.');
+        done(false);
+      }
+    }).catch(err => {
+      motionPermission = 'denied';
+      log('error', 'Motion permission request failed: ' + (err && err.message || err));
+      done(false);
+    });
+  }
+
 
   /* ---------- data binding ----------
      Walks the bound View Model, one row per property, nested models included.
      Editing a row writes straight through to the running instance. */
 
   function buildDataBinding(){
+    gyroBindings = [];
+    if (gyroWatchdog){ clearTimeout(gyroWatchdog); gyroWatchdog = null; }
     const box = $('dbProps');
     box.innerHTML = '';
     let vmi = null;
@@ -983,6 +1043,95 @@
         if (!isNaN(v)) handle.value = (p.type === 'integer') ? Math.round(v) : v;
       };
       head.appendChild(f);
+
+      if (typeof DeviceOrientationEvent !== 'undefined'){
+        const tilt = document.createElement('button');
+        tilt.className = 'switch';
+        tilt.setAttribute('aria-pressed', 'false');
+        tilt.setAttribute('aria-label', 'Tilt control for ' + p.name);
+        tilt.style.marginLeft = '8px';
+        head.appendChild(tilt);
+
+        const AXIS_DEFAULT = {beta: [-90, 90], gamma: [-90, 90], alpha: [0, 360]};
+        const cal = document.createElement('div');
+        cal.hidden = true;
+
+        const axisRow = document.createElement('div');
+        axisRow.className = 'num-row';
+        const axisSel = document.createElement('select');
+        ['beta', 'gamma', 'alpha'].forEach(a => {
+          const o = document.createElement('option'); o.value = o.textContent = a; axisSel.appendChild(o);
+        });
+        axisRow.appendChild(axisSel);
+
+        const srcRow = document.createElement('div');
+        srcRow.className = 'num-row';
+        const srcLo = document.createElement('input'); srcLo.type = 'number'; srcLo.title = 'sensor min';
+        const srcHi = document.createElement('input'); srcHi.type = 'number'; srcHi.title = 'sensor max';
+        srcRow.append(srcLo, srcHi);
+
+        const outRow = document.createElement('div');
+        outRow.className = 'num-row';
+        const start = Number(handle.value) || 0;
+        const outLo = document.createElement('input'); outLo.type = 'number'; outLo.title = 'output min';
+        outLo.value = Math.min(0, start);
+        const outHi = document.createElement('input'); outHi.type = 'number'; outHi.title = 'output max';
+        outHi.value = Math.max(100, start);
+        outRow.append(outLo, outHi);
+
+        function setAxisDefaults(){
+          const d = AXIS_DEFAULT[axisSel.value];
+          srcLo.value = d[0]; srcHi.value = d[1];
+        }
+        setAxisDefaults();
+
+        cal.append(axisRow, srcRow, outRow);
+        row.appendChild(cal);
+
+        let binding = null;
+
+        function stopBinding(){
+          if (!binding) return;
+          const idx = gyroBindings.indexOf(binding);
+          if (idx >= 0) gyroBindings.splice(idx, 1);
+          binding = null;
+          f.disabled = false;
+          cal.hidden = true;
+          tilt.setAttribute('aria-pressed', 'false');
+        }
+
+        function startBinding(){
+          binding = {
+            handle: handle, propType: p.type, axis: axisSel.value,
+            srcLo: parseFloat(srcLo.value) || 0, srcHi: parseFloat(srcHi.value) || 1,
+            outLo: parseFloat(outLo.value) || 0, outHi: parseFloat(outHi.value) || 0,
+            fieldEl: f
+          };
+          const firstBinding = gyroBindings.length === 0;
+          gyroBindings.push(binding);
+          f.disabled = true;
+          cal.hidden = false;
+          tilt.setAttribute('aria-pressed', 'true');
+
+          if (firstBinding){
+            clearTimeout(gyroWatchdog);
+            gyroWatchdog = setTimeout(() => {
+              log('error', 'No tilt data has arrived from this device yet.');
+            }, 2000);
+          }
+        }
+
+        tilt.onclick = () => {
+          if (binding){ stopBinding(); return; }
+          ensureMotionAccess(ok => { if (ok) startBinding(); });
+        };
+
+        axisSel.onchange = () => { setAxisDefaults(); if (binding) binding.axis = axisSel.value; };
+        srcLo.oninput = () => { if (binding) binding.srcLo = parseFloat(srcLo.value) || 0; };
+        srcHi.oninput = () => { if (binding) binding.srcHi = parseFloat(srcHi.value) || 1; };
+        outLo.oninput = () => { if (binding) binding.outLo = parseFloat(outLo.value) || 0; };
+        outHi.oninput = () => { if (binding) binding.outHi = parseFloat(outHi.value) || 0; };
+      }
     }
 
     if (p.type === 'string'){
